@@ -132,4 +132,13 @@ Node是K8s集群中真正的工作负载节点，K8s集群由多个Node共同承
 
 Service抽象概念的实现，将到service的请求按策略（负载均衡算法分发到后端的pod ）上，默认使用iptables mode实现；支持nodeport模式，实现从外部访问集群内的service
 
+# 其他组件
+
+* coreDNS： 可以为集群中的SVC创建一个域名IP的对应关系解析
+* dashboard: 给k8s集群提供一个 B/S结构访问体系
+* ingress controller： 官方只提供四层代理，ingress提供7层
+* federation： 提供一个可以跨集群中心多k8s统一管理的功能
+* prometheus: 提供k8s集群的监控能力
+* EFK： 提供k8s集群日志统一分析介入平台
+
 
