@@ -76,6 +76,5 @@
     * --wait: 等待所有的pod都处于ready状态
     * --no-hooks: 跳过running hooks
     * --recreate-pods: 涉及到的pod都要重新建立，适用于upgrade、rollback
-  
-## 创建自己的chart
+
    
