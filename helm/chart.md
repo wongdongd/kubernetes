@@ -87,3 +87,5 @@ tillerVersion:  chart使用的tiller版本， This should be expressed as a SemV
     可以使用```helm dependency update [Chart-name]```, 将对应的依赖下载到charts目录下
 
     ![](./images/helmdepup.png)
+
+* charts/目录
