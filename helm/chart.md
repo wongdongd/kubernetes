@@ -88,4 +88,17 @@ tillerVersion:  chart使用的tiller版本， This should be expressed as a SemV
 
     ![](./images/helmdepup.png)
 
+    附加参数：
+      * alias：别名，对于使用相同的chart，可以指定别名来用多个
+      * tags和condition：指定子chart是否能用的两个标签，condition是对tags的重写；详见https://v2.helm.sh/docs/developing_charts/#tags-and-condition-fields-in-requirements-yaml
+      * import-values和exports：import-values是父chart的requirements.yaml中的参数，exports是子chart的values.yaml中的参数
+
 * charts/目录
+
+> 可以在charts目录下放置压缩或者解压文件，依赖chart的名字不能以_或者.开头，这种会被helm忽略。
+
+```helm fetch```可以删除一个chart的依赖
+
+## Templates和Values
+
+
