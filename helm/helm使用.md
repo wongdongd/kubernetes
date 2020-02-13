@@ -10,7 +10,7 @@
 
 1. helm search 
    ![](./images/search.png)
-2. helm inspect 
+2. helm inspect/status
    ![](./images/inspect.png)
 3. helm install --name xxx
    ![](./images/install-name.png)
