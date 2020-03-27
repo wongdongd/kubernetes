@@ -179,3 +179,277 @@ PV的种类通过插件实现,k8s目前支持以下插件:(只列了常见的)
 
 ## PersistentVolumes
 
+每个PV包含一个spec和状态，即卷的spec和状态。PV对象的名称必须是有效的DNS子域名。
+```
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv0003
+spec:
+  capacity:
+    storage: 5Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Recycle
+  storageClassName: slow
+  mountOptions:
+    - hard
+    - nfsvers=4.1
+  nfs:
+    path: /tmp
+    server: 172.17.0.2
+```
+
+### Capacity(容量)
+
+通常可以在PV的 ```capacity```属性指定存储的容量。
+目前只可以配置或者请求存储大小，预计将来会有IOPS、吞吐量等。
+
+### Volume Mode
+
+k8s支持两种PV的volumeMode： Filesystem和Block。volumeMode是一个可选的API参数，默认是Filesystem。
+
+* 一个具有volumeMode：Filesystem的卷会被挂载到Pod的中目录。如果该卷由块设备支持并且该设备为空，则Kuberneretes会在首次挂载之前在该设备上创建一个文件系统
+
+* 可以将volumeMode设置为Block以将卷用作原始块设备。这样的卷会以一个没有文件系统的块设备挂载进Pod。模式对于为Pod提供最快的访问卷的方式很有用，因为Pod和卷之间没有任何文件系统层。然而，运行在Pod中的应用必须知道如何使用这个块设备。详情[Raw Block Volume Support](https://kubernetes.io/docs/concepts/storage/persistent-volumes/docs/concepts/storage/persistent-volumes/#raw-block-volume-support)
+
+### Access Modes
+
+可以通过资源提供者支持的任何方式将PV安装在主机上。如下表所示，提供者有不同的能力，并且可以将PV的访问模式设置为特定卷支持的模式。例如：NFS可以支持多个 读/写客户端，但是一个特定的NFS PV可能以只读模式提供服务。每个PV都有自己的一组访问模式，可以描述PV的能力。
+
+访问模式：
+* ReadWriteOnce: 该卷可以通过单个节点以读写方式安装
+* ReadOnlyMany: 该卷可以被许多节点只读安装
+* ReadWriteMany: 该卷可以被许多节点以读写方式安装
+
+在命令行CLI端，访问模式缩写为：
+* RWO: ReadWriteOnce
+* ROX: ReadOnlyMany
+* RWX: ReadWriteMany
+
+**注意**：一个卷同一时间只能使用一个访问模式，即使它支持多种。
+
+### Class
+
+通过设定```storageClassName```属性为StorageClass的名称，可以为PV设置一个class。具有特定class的PV将只会绑定到请求该class的PVC上。一个没有storageClassName的PV不会有class并且将只会绑定到请求没有指定class的PVC上。
+
+在之前版本，注解```volume.beta.kubernetes.io/storage-class```用来替代storageClassName属性。目前该注解还在使用，但是将来版本将会过期。
+
+### Reclaim Policy
+
+目前的回收策略有：
+* Retain: 手动回收
+* Recycle: 基本的删除(rm -rf /thevolume/*)
+* Delete: 关联的卷将被删除
+
+目前，只有NFS和HostPath支持Recycle。AWS EBS, GCE PD, Azure Disk, 和Cinder支持Delete。
+
+### Mount Options
+当PV被安装在node上时，k8s管理员可以指定额外的挂载选项。
+
+挂载选项未经验证，因此如果其中一个无效，挂载就会失败。类似class，注解```volume.beta.kubernetes.io/mount-options```可以用来替代mountOptions属性，但是未来会过期。
+
+### Node Affinity
+
+> 大多数volume都不需要设置这个属性。AWS EBS, GCE PD和Azure Disk卷类型比较流行使用这个属性。
+
+PV可以指定节点亲和力来定义约束，以限制可以访问此卷的节点。使用PV的Pod仅会安排到由节点亲缘关系选择的节点上.
+
+### Phase
+
+一个卷有以下几种状态：
+* Available: 还没有绑定到声明的自由资源
+* Bound: 卷已绑定到声明上
+* Released: 声明被删除了，但是集群还没有重新声明该资源
+* Failed: 卷自动回收失败
+
+命令行将会展示绑定到PV的PVC的名称。
+
+## PersistentVolumeClaims
+每个PVC包含一个spec和状态，即卷的spec和状态。PVC对象的名称必须是有效的DNS子域名。
+```
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: myclaim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: slow
+  selector:
+    matchLabels:
+      release: "stable"
+    matchExpressions:
+      - {key: environment, operator: In, values: [dev]}
+```
+
+### Access Modes(访问模式)
+当请求使用特定访问模式进行存储时，声明使用与卷相同的约定。
+
+### Volume Modes
+声明使用与卷相同的约定来表示将卷作为文件系统或块设备使用。
+
+### Resources
+声明与Pods一样，可以请求特定数量的资源。在这种情况下，该请求用于存储。相同的资源模型适用于数量和声明
+
+### Selector
+声明可以指定标签选择器以进一步过滤卷集。仅其标签与选择器匹配的卷可以绑定到声明。选择器可以包含两个字段:
+* matchLables: 该卷必须带有此值的标签
+* matchExpressions: 通过指定键，值列表以及与键和值相关的运算符得出的要求列表。有效运算符包括In，NotIn，Exists和DidNotExist
+
+matchLabel和matchExpressions中的所有要求都进行“与”运算-必须全部满足才能匹配.
+
+### Class
+声明可以通过使用属性storageClassName指定StorageClass的名称来请求特定类。只能将所请求类的PV（具有与PVC相同的storageClassName的PV）绑定到PVC.
+
+PVC不是必须要请求类。始终将其storageClassName设置为""的PVC解释为请求不带类的PV，因此只能将其绑定到不带类的PV（不带注释或一组等于"）。没有storageClassName的PVC不太相同，集群会对其进行不同的处理，具体取决于是否打开了DefaultStorageClass asmission插件:
+* 插件打开：管理员会指定一个默认的StorageClass。所有没有storageClassName的PVC将会绑定到该默认的PV。通过将StorageClass对象中的注释storageclass.kubernetes.io/is-default-class设置为true来指定默认的StorageClass。如果管理员未指定默认值，则集群将会按照插件关闭处理。如果指定了多个默认值，admission插件会阻止所有PVC的创建。
+* 插件关闭：没有默认StorageClass的概念。所有没有storageClassName的PVC只能绑定到没有类的PV。在这种情况下，不使用storageClassName的PVC与将storageClassName设置为“”的PVC一样对待。
+
+根据安装方法的不同，可以在安装过程中通过插件管理器将默认的StorageClass部署到Kubernetes集群。
+
+当PVC在请求StorageClass外还指定了selector选择器，将会对这些请求做与操作：只有同时满足请求类和标签的PV才被绑定到PVC。
+
+## Claims As Volume
+
+Pod通过是用声明来访问存储并用做卷。声明和Pod要在同一个命名空间。集群在Pod的命名空间中寻找声明，并且使用其获得支持声明的PV。之后卷会被安装在主机和Pod中：
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+spec:
+  containers:
+    - name: myfrontend
+      image: nginx
+      volumeMounts:
+      - mountPath: "/var/www/html"
+        name: mypd
+  volumes:
+    - name: mypd
+      persistentVolumeClaim:
+        claimName: myclaim
+```
+
+### A note on namespaces
+PersistentVolumes绑定是排他的，并且由于PersistentVolumeClaims是命名空间对象，因此只能在一个命名空间中使用“Many”模式（ROX，RWX）挂载声明.
+
+## Raw Block Volume Support
+支持原始块卷和动态配置的插件包括：RDB...
+
+### PersistentVolume using a Raw Block Volume
+```
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: block-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Block
+  persistentVolumeReclaimPolicy: Retain
+  fc:
+    targetWWNs: ["50060e801049cfd1"]
+    lun: 0
+    readOnly: false
+```
+
+### PersistentVolumeClaim requesting a Raw Block Volume
+```
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: block-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Block
+  resources:
+    requests:
+      storage: 10Gi
+```
+### Pod specification adding Raw Block Device path in container
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-block-volume
+spec:
+  containers:
+    - name: fc-container
+      image: fedora:26
+      command: ["/bin/sh", "-c"]
+      args: [ "tail -f /dev/null" ]
+      volumeDevices:
+        - name: data
+          devicePath: /dev/xvda
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: block-pvc
+```
+### Binding Block Volumes
+如果用户通过使用PersistentVolumeClaim规范中的volumeMode字段指示原始块来请求原始块卷，则绑定规则与以前的版本（将其不视为该规范的一部分）的版本略有不同。
+
+## Volume Snapshot and Restore Volume from Snapshot Support(卷快照和从快照恢复卷)
+卷快照功能仅有CSI卷插件支持。
+
+要启用从卷快照数据源还原卷的支持，请在apiserver和controller-manager上启用VolumeSnapshotDataSource功能.
+
+### Create a PersistentVolumeClaim from a Volume Snapshot
+```
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: restore-pvc
+spec:
+  storageClassName: csi-hostpath-sc
+  dataSource:
+    name: new-snapshot-test
+    kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+```
+
+## Volume Clone
+仅有CSI卷插件支持卷拷贝
+### Create PersistentVolumeClaim from an existing PVC
+```
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cloned-pvc
+spec:
+  storageClassName: my-csi-plugin
+  dataSource:
+    name: existing-src-pvc-name
+    kind: PersistentVolumeClaim
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+```
+
+## Writing Portable Configuration(编写便携式配置)
+
+如果您要编写在广泛的集群上运行并且需要持久存储的配置模板或示例，建议您使用以下模式:
+* 将PersistentVolumeClaim对象包含在配置包中（与Deployment，ConfigMap等一起)
+* 不要在配置中包括PersistentVolume对象，因为实例化配置的用户可能没有创建PersistentVolumes的权限
+* 在实例化模板时，为用户提供提供storage class名称的选项:
+  * 如果用户提供了storage class名称，则将该值放入persistentVolumeClaim.storageClassName字段中。如果集群具有由管理员启用的StorageClasses，这将导致PVC匹配正确的StorageClass。
+  * 如果用户未提供storage class名称，则将persistentVolumeClaim.storageClassName字段保留为nil。这将导致为集群中具有默认StorageClass的用户自动设置PV。许多群集环境都安装了默认的StorageClass，或者管理员可以创建自己的默认StorageClass。
+
+* 在您的工具中，请注意一段时间后未绑定的PVC，并将其暴露给用户，因为这可能表明集群没有动态存储支持（在这种情况下，用户应创建匹配的PV）或集群没有存储系统（在这种情况下，用户无法部署需要PVC的配置）。
+
